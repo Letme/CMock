@@ -12,20 +12,24 @@ class CMockConfig
     :mock_path                   => 'mocks',
     :mock_prefix                 => 'Mock',
     :mock_suffix                 => '',
+    :weak                        => '',
     :subdir                      => nil,
     :plugins                     => [],
     :strippables                 => ['(?:__attribute__\s*\(+.*?\)+)'],
     :attributes                  => ['__ramfunc', '__irq', '__fiq', 'register', 'extern'],
     :c_calling_conventions       => ['__stdcall', '__cdecl', '__fastcall'],
     :enforce_strict_ordering     => false,
+    :fail_on_unexpected_calls    => true,
     :unity_helper_path           => false,
     :treat_as                    => {},
+    :treat_as_array              => {},
     :treat_as_void               => [],
     :memcmp_if_unknown           => true,
     :when_no_prototypes          => :warn,           #the options being :ignore, :warn, or :error
     :when_ptr                    => :compare_data,   #the options being :compare_ptr, :compare_data, or :smart
     :verbosity                   => 2,               #the options being 0 errors only, 1 warnings and errors, 2 normal info, 3 verbose
     :treat_externs               => :exclude,        #the options being :include or :exclude
+    :treat_inlines               => :exclude,        #the options being :include or :exclude
     :callback_include_count      => true,
     :callback_after_arg_check    => false,
     :includes                    => nil,
@@ -34,6 +38,8 @@ class CMockConfig
     :includes_c_pre_header       => nil,
     :includes_c_post_header      => nil,
     :orig_header_include_fmt     => "#include \"%s\"",
+    :array_size_type             => [],
+    :array_size_name             => 'size|len',
   }
 
   def initialize(options=nil)
@@ -58,6 +64,17 @@ class CMockConfig
       end
     end
     options[:unity_helper_path] ||= options[:unity_helper]
+    options[:unity_helper_path] = [options[:unity_helper_path]] if options[:unity_helper_path].is_a? String
+
+    if options[:unity_helper_path]
+      require 'pathname'
+      includes1 = options[:includes_c_post_header] || []
+      includes2 = options[:unity_helper_path].map do |path|
+        Pathname(path).relative_path_from(Pathname(options[:mock_path])).to_s
+      end
+      options[:includes_c_post_header] = (includes1 + includes2).uniq
+    end
+
     options[:plugins].compact!
     options[:plugins].map! {|p| p.to_sym}
     @options = options
@@ -66,7 +83,11 @@ class CMockConfig
     treat_as_map.merge!(@options[:treat_as])
     @options[:treat_as] = treat_as_map
 
-    @options.each_key { |key| eval("def #{key.to_s}() return @options[:#{key.to_s}] end") }
+    @options.each_key do |key|
+      unless methods.include?(key)
+        eval("def #{key.to_s}() return @options[:#{key.to_s}] end")
+      end
+    end
   end
 
   def load_config_file_from_yaml yaml_filename
@@ -84,8 +105,11 @@ class CMockConfig
   end
 
   def load_unity_helper
-    return File.new(@options[:unity_helper_path]).read if (@options[:unity_helper_path])
-    return nil
+    return nil unless (@options[:unity_helper_path])
+
+    return @options[:unity_helper_path].inject("") do |unity_helper, filename|
+      unity_helper + "\n" + File.new(filename).read
+    end
   end
 
   def standard_treat_as_map
@@ -114,6 +138,8 @@ class CMockConfig
       'UINT32'          => 'HEX32',
       'UINT32_T'        => 'HEX32',
       'void*'           => 'HEX8_ARRAY',
+      'void const*'     => 'HEX8_ARRAY',
+      'const void*'     => 'HEX8_ARRAY',
       'unsigned short'  => 'HEX16',
       'uint16'          => 'HEX16',
       'uint16_t'        => 'HEX16',
@@ -125,6 +151,8 @@ class CMockConfig
       'UINT8'           => 'HEX8',
       'UINT8_T'         => 'HEX8',
       'char*'           => 'STRING',
+      'char const*'     => 'STRING',
+      'const char*'     => 'STRING',
       'pCHAR'           => 'STRING',
       'cstring'         => 'STRING',
       'CSTRING'         => 'STRING',

@@ -5,7 +5,7 @@
 # ==========================================
 
 require File.expand_path(File.dirname(__FILE__)) + "/../test_helper"
-require 'cmock_generator_plugin_expect'
+require File.expand_path(File.dirname(__FILE__)) + '/../../lib/cmock_generator_plugin_expect'
 
 describe CMockGeneratorPluginExpect, "Verify CMockGeneratorPluginExpect Module Without Global Ordering" do
 
@@ -26,8 +26,8 @@ describe CMockGeneratorPluginExpect, "Verify CMockGeneratorPluginExpect Module W
   end
 
   it "have set up internal priority on init" do
-    assert_equal(nil,     @cmock_generator_plugin_expect.unity_helper)
-    assert_equal(5,       @cmock_generator_plugin_expect.priority)
+    assert_nil(@cmock_generator_plugin_expect.unity_helper)
+    assert_equal(5, @cmock_generator_plugin_expect.priority)
   end
 
   it "not include any additional include files" do
@@ -119,7 +119,6 @@ describe CMockGeneratorPluginExpect, "Verify CMockGeneratorPluginExpect Module W
                 "{\n",
                 "mock_retval_0 ",
                 "mock_retval_1 ",
-                "  UNITY_CLR_DETAILS();\n",
                 "}\n\n"
                ].join
     returned = @cmock_generator_plugin_expect.mock_interfaces(function)
@@ -136,7 +135,6 @@ describe CMockGeneratorPluginExpect, "Verify CMockGeneratorPluginExpect Module W
                 "mock_retval_0 ",
                 "mock_retval_1 ",
                 "mock_retval_2",
-                "  UNITY_CLR_DETAILS();\n",
                 "}\n\n"
                ].join
     returned = @cmock_generator_plugin_expect.mock_interfaces(function)
@@ -153,7 +151,6 @@ describe CMockGeneratorPluginExpect, "Verify CMockGeneratorPluginExpect Module W
                 "mock_retval_0 ",
                 "mock_retval_1 ",
                 "mock_retval_2",
-                "  UNITY_CLR_DETAILS();\n",
                 "}\n\n"
                ].join
     returned = @cmock_generator_plugin_expect.mock_interfaces(function)
@@ -168,7 +165,6 @@ describe CMockGeneratorPluginExpect, "Verify CMockGeneratorPluginExpect Module W
                 "{\n",
                 "mock_retval_0 ",
                 "mock_retval_1 ",
-                "  UNITY_CLR_DETAILS();\n",
                 "}\n\n"
                ].join
     @cmock_generator_plugin_expect.ordered = true
@@ -179,7 +175,8 @@ describe CMockGeneratorPluginExpect, "Verify CMockGeneratorPluginExpect Module W
   it "add mock verify lines" do
     function = {:name => "Banana" }
     expected = "  UNITY_SET_DETAIL(CMockString_Banana);\n" +
-               "  UNITY_TEST_ASSERT(CMOCK_GUTS_NONE == Mock.Banana_CallInstance, cmock_line, CMockStringCalledLess);\n"
+               "  UNITY_TEST_ASSERT(CMOCK_GUTS_NONE == call_instance, cmock_line, CMockStringCalledLess);\n" +
+               "  UNITY_CLR_DETAILS();\n"
     returned = @cmock_generator_plugin_expect.mock_verify(function)
     assert_equal(expected, returned)
   end

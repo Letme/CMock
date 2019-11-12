@@ -24,7 +24,13 @@ class CMockGeneratorPluginReturnThruPtr
     function[:args].each do |arg|
       if (@utils.ptr_or_str?(arg[:type]) and not arg[:const?])
         lines << "#define #{function[:name]}_ReturnThruPtr_#{arg[:name]}(#{arg[:name]})"
-        lines << " #{function[:name]}_CMockReturnMemThruPtr_#{arg[:name]}(__LINE__, #{arg[:name]}, sizeof(*#{arg[:name]}))\n"
+        # If the pointer type actually contains an asterisk, we can do sizeof the type (super safe), otherwise
+        # we need to do a sizeof the dereferenced pointer (which could be a problem if give the wrong size
+        if (arg[:type][-1] == '*')
+          lines << " #{function[:name]}_CMockReturnMemThruPtr_#{arg[:name]}(__LINE__, #{arg[:name]}, sizeof(#{arg[:type][0..-2]}))\n"
+        else
+          lines << " #{function[:name]}_CMockReturnMemThruPtr_#{arg[:name]}(__LINE__, #{arg[:name]}, sizeof(*#{arg[:name]}))\n"
+        end
         lines << "#define #{function[:name]}_ReturnArrayThruPtr_#{arg[:name]}(#{arg[:name]}, cmock_len)"
         lines << " #{function[:name]}_CMockReturnMemThruPtr_#{arg[:name]}(__LINE__, #{arg[:name]}, (int)(cmock_len * (int)sizeof(*#{arg[:name]})))\n"
         lines << "#define #{function[:name]}_ReturnMemThruPtr_#{arg[:name]}(#{arg[:name]}, cmock_size)"
@@ -40,7 +46,6 @@ class CMockGeneratorPluginReturnThruPtr
     func_name = function[:name]
     function[:args].each do |arg|
       arg_name = arg[:name]
-      arg_type = arg[:type]
       if (@utils.ptr_or_str?(arg[:type]) and not arg[:const?])
         lines << "void #{func_name}_CMockReturnMemThruPtr_#{arg_name}(UNITY_LINE_TYPE cmock_line, #{arg[:type]} #{arg_name}, int cmock_size)\n"
         lines << "{\n"
@@ -60,11 +65,11 @@ class CMockGeneratorPluginReturnThruPtr
     lines = []
     function[:args].each do |arg|
       arg_name = arg[:name]
-      arg_type = arg[:type]
       if (@utils.ptr_or_str?(arg[:type]) and not arg[:const?])
         lines << "  if (cmock_call_instance->ReturnThruPtr_#{arg_name}_Used)\n"
         lines << "  {\n"
-        lines << "    memcpy(#{arg_name}, cmock_call_instance->ReturnThruPtr_#{arg_name}_Val,\n"
+        lines << "    UNITY_TEST_ASSERT_NOT_NULL(#{arg_name}, cmock_line, CMockStringPtrIsNULL);\n"
+        lines << "    memcpy((void*)#{arg_name}, (void*)cmock_call_instance->ReturnThruPtr_#{arg_name}_Val,\n"
         lines << "      cmock_call_instance->ReturnThruPtr_#{arg_name}_Size);\n"
         lines << "  }\n"
       end

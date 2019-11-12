@@ -6,7 +6,7 @@
 
 
 require File.expand_path(File.dirname(__FILE__)) + "/../test_helper"
-require 'cmock_config'
+require File.expand_path(File.dirname(__FILE__)) + '/../../lib/cmock_config'
 
 
 describe CMockConfig, "Verify CMockConfig Module" do
@@ -14,10 +14,12 @@ describe CMockConfig, "Verify CMockConfig Module" do
   it "use default settings when no parameters are specified" do
     config = CMockConfig.new
     assert_equal(CMockConfig::CMockDefaultOptions[:mock_path],             config.mock_path)
-    assert_equal(CMockConfig::CMockDefaultOptions[:includes],              config.includes)
+    assert_nil(CMockConfig::CMockDefaultOptions[:includes])
+    assert_nil(config.includes)
     assert_equal(CMockConfig::CMockDefaultOptions[:attributes],            config.attributes)
     assert_equal(CMockConfig::CMockDefaultOptions[:plugins],               config.plugins)
     assert_equal(CMockConfig::CMockDefaultOptions[:treat_externs],         config.treat_externs)
+    assert_equal(CMockConfig::CMockDefaultOptions[:treat_inlines],         config.treat_inlines)
   end
 
   it "replace only options specified in a hash" do
@@ -29,15 +31,18 @@ describe CMockConfig, "Verify CMockConfig Module" do
     assert_equal(test_attributes,                                           config.attributes)
     assert_equal(CMockConfig::CMockDefaultOptions[:plugins],                config.plugins)
     assert_equal(CMockConfig::CMockDefaultOptions[:treat_externs],          config.treat_externs)
+    assert_equal(CMockConfig::CMockDefaultOptions[:treat_inlines],          config.treat_inlines)
   end
 
   it "replace only options specified in a yaml file" do
     test_plugins = [:soda, :pizza]
     config = CMockConfig.new("#{File.expand_path(File.dirname(__FILE__))}/cmock_config_test.yml")
     assert_equal(CMockConfig::CMockDefaultOptions[:mock_path],              config.mock_path)
-    assert_equal(CMockConfig::CMockDefaultOptions[:includes],               config.includes)
+    assert_nil(CMockConfig::CMockDefaultOptions[:includes])
+    assert_nil(config.includes)
     assert_equal(test_plugins,                                              config.plugins)
     assert_equal(:include,                                                  config.treat_externs)
+    assert_equal(:include,                                                  config.treat_inlines)
   end
 
   it "populate treat_as map with internal standard_treat_as_map defaults, redefine defaults, and add custom values" do

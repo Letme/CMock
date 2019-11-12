@@ -5,7 +5,7 @@
 # ==========================================
 
 require File.expand_path(File.dirname(__FILE__)) + "/../test_helper"
-require 'cmock_generator_utils'
+require File.expand_path(File.dirname(__FILE__)) + '/../../lib/cmock_generator_utils'
 
 describe CMockGeneratorUtils, "Verify CMockGeneratorUtils Module" do
 
@@ -20,7 +20,7 @@ describe CMockGeneratorUtils, "Verify CMockGeneratorUtils Module" do
     @config.expect :plugins, []
     @config.expect :plugins, []
     @config.expect :plugins, []
-    @config.expect :treat_as, {'int' => 'INT','short' => 'INT16','long' => 'INT','char' => 'INT8','char*' => 'STRING'}
+    @config.expect :treat_as, {'int' => 'INT','short' => 'INT16','long' => 'INT','char' => 'INT8','const char*' => 'STRING'}
     @cmock_generator_utils_simple = CMockGeneratorUtils.new(@config, {:unity_helper => @unity_helper})
 
     @config.expect :when_ptr, :smart
@@ -31,7 +31,7 @@ describe CMockGeneratorUtils, "Verify CMockGeneratorUtils Module" do
     @config.expect :plugins, [:array, :cexception, :return_thru_ptr, :ignore_arg, :ignore]
     @config.expect :plugins, [:array, :cexception, :return_thru_ptr, :ignore_arg, :ignore]
     @config.expect :plugins, [:array, :cexception, :return_thru_ptr, :ignore_arg, :ignore]
-    @config.expect :treat_as, {'int' => 'INT','short' => 'INT16','long' => 'INT','char' => 'INT8','uint32_t' => 'HEX32','char*' => 'STRING'}
+    @config.expect :treat_as, {'int' => 'INT','short' => 'INT16','long' => 'INT','char' => 'INT8','uint32_t' => 'HEX32','const char*' => 'STRING'}
     @cmock_generator_utils_complex = CMockGeneratorUtils.new(@config, {:unity_helper => @unity_helper, :A=>1, :B=>2})
   end
 
@@ -99,14 +99,15 @@ describe CMockGeneratorUtils, "Verify CMockGeneratorUtils Module" do
     arg1 = { :name => "Orange", :const? => false, :type => 'int', :ptr? => false }
     expected1 = "  cmock_call_instance->Expected_Orange = Orange;\n"
 
-    arg2 = { :name => "Lemon", :const? => true, :type => 'const char*', :ptr? => true }
-    expected2 = "  cmock_call_instance->Expected_Lemon = (const char*)Lemon;\n"
+    arg2 = { :name => "Lemon", :const? => true, :type => 'const char*', :ptr? => false }
+    expected2 = "  cmock_call_instance->Expected_Lemon = Lemon;\n"
 
     arg3 = { :name => "Kiwi", :const? => false, :type => 'KIWI_T*', :ptr? => true }
     expected3 = "  cmock_call_instance->Expected_Kiwi = Kiwi;\n"
 
     arg4 = { :name => "Lime", :const? => false, :type => 'LIME_T', :ptr? => false }
-    expected4 = "  memcpy(&cmock_call_instance->Expected_Lime, &Lime, sizeof(LIME_T));\n"
+    expected4 = "  memcpy((void*)(&cmock_call_instance->Expected_Lime), (void*)(&Lime),\n" +
+                "         sizeof(LIME_T[sizeof(Lime) == sizeof(LIME_T) ? 1 : -1])); /* add LIME_T to :treat_as_array if this causes an error */\n"
 
     assert_equal(expected1, @cmock_generator_utils_simple.code_add_an_arg_expectation(arg1))
     assert_equal(expected2, @cmock_generator_utils_simple.code_add_an_arg_expectation(arg2))
@@ -119,8 +120,8 @@ describe CMockGeneratorUtils, "Verify CMockGeneratorUtils Module" do
     expected1 = "  cmock_call_instance->Expected_Orange = Orange;\n" +
                 "  cmock_call_instance->IgnoreArg_Orange = 0;\n"
 
-    arg2 = { :name => "Lemon", :const? => true, :type => 'const char*', :ptr? => true }
-    expected2 = "  cmock_call_instance->Expected_Lemon = (const char*)Lemon;\n" +
+    arg2 = { :name => "Lemon", :const? => true, :type => 'const char*', :ptr? => false }
+    expected2 = "  cmock_call_instance->Expected_Lemon = Lemon;\n" +
                 "  cmock_call_instance->Expected_Lemon_Depth = Lemon_Depth;\n" +
                 "  cmock_call_instance->IgnoreArg_Lemon = 0;\n"
 
@@ -131,7 +132,8 @@ describe CMockGeneratorUtils, "Verify CMockGeneratorUtils Module" do
                 "  cmock_call_instance->ReturnThruPtr_Kiwi_Used = 0;\n"
 
     arg4 = { :name => "Lime", :const? => false, :type => 'LIME_T', :ptr? => false }
-    expected4 = "  memcpy(&cmock_call_instance->Expected_Lime, &Lime, sizeof(LIME_T));\n" +
+    expected4 = "  memcpy((void*)(&cmock_call_instance->Expected_Lime), (void*)(&Lime),\n" +
+                "         sizeof(LIME_T[sizeof(Lime) == sizeof(LIME_T) ? 1 : -1])); /* add LIME_T to :treat_as_array if this causes an error */\n" +
                 "  cmock_call_instance->IgnoreArg_Lime = 0;\n"
 
     assert_equal(expected1, @cmock_generator_utils_complex.code_add_an_arg_expectation(arg1))
@@ -151,10 +153,12 @@ describe CMockGeneratorUtils, "Verify CMockGeneratorUtils Module" do
                  :args_string => "stuff",
                  :args => [test_arg[:int_ptr], test_arg[:mytype], test_arg[:string]]
     }
-    expected = "void CMockExpectParameters_Melon(CMOCK_Melon_CALL_INSTANCE* cmock_call_instance, stuff)\n{\n" +
+    expected = "void CMockExpectParameters_Melon(CMOCK_Melon_CALL_INSTANCE* cmock_call_instance, stuff);\n" +
+               "void CMockExpectParameters_Melon(CMOCK_Melon_CALL_INSTANCE* cmock_call_instance, stuff)\n{\n" +
                "  cmock_call_instance->Expected_MyIntPtr = MyIntPtr;\n" +
-               "  memcpy(&cmock_call_instance->Expected_MyMyType, &MyMyType, sizeof(MY_TYPE));\n" +
-               "  cmock_call_instance->Expected_MyStr = (char*)MyStr;\n" +
+               "  memcpy((void*)(&cmock_call_instance->Expected_MyMyType), (void*)(&MyMyType),\n" +
+               "         sizeof(MY_TYPE[sizeof(MyMyType) == sizeof(MY_TYPE) ? 1 : -1])); /* add MY_TYPE to :treat_as_array if this causes an error */\n" +
+               "  cmock_call_instance->Expected_MyStr = MyStr;\n" +
                "}\n\n"
     assert_equal(expected, @cmock_generator_utils_simple.code_add_argument_loader(function))
   end
@@ -164,15 +168,35 @@ describe CMockGeneratorUtils, "Verify CMockGeneratorUtils Module" do
                  :args_string => "stuff",
                  :args => [test_arg[:int_ptr], test_arg[:mytype], test_arg[:string]]
     }
-    expected = "void CMockExpectParameters_Melon(CMOCK_Melon_CALL_INSTANCE* cmock_call_instance, int* MyIntPtr, int MyIntPtr_Depth, const MY_TYPE MyMyType, const char* MyStr)\n{\n" +
+    expected = "void CMockExpectParameters_Melon(CMOCK_Melon_CALL_INSTANCE* cmock_call_instance, int* MyIntPtr, int MyIntPtr_Depth, const MY_TYPE MyMyType, const char* MyStr);\n" +
+               "void CMockExpectParameters_Melon(CMOCK_Melon_CALL_INSTANCE* cmock_call_instance, int* MyIntPtr, int MyIntPtr_Depth, const MY_TYPE MyMyType, const char* MyStr)\n{\n" +
                "  cmock_call_instance->Expected_MyIntPtr = MyIntPtr;\n" +
                "  cmock_call_instance->Expected_MyIntPtr_Depth = MyIntPtr_Depth;\n" +
                "  cmock_call_instance->IgnoreArg_MyIntPtr = 0;\n" +
                "  cmock_call_instance->ReturnThruPtr_MyIntPtr_Used = 0;\n" +
-               "  memcpy(&cmock_call_instance->Expected_MyMyType, &MyMyType, sizeof(MY_TYPE));\n" +
+               "  memcpy((void*)(&cmock_call_instance->Expected_MyMyType), (void*)(&MyMyType),\n" +
+               "         sizeof(MY_TYPE[sizeof(MyMyType) == sizeof(MY_TYPE) ? 1 : -1])); /* add MY_TYPE to :treat_as_array if this causes an error */\n" +
                "  cmock_call_instance->IgnoreArg_MyMyType = 0;\n" +
-               "  cmock_call_instance->Expected_MyStr = (char*)MyStr;\n" +
+               "  cmock_call_instance->Expected_MyStr = MyStr;\n" +
                "  cmock_call_instance->IgnoreArg_MyStr = 0;\n" +
+               "}\n\n"
+    assert_equal(expected, @cmock_generator_utils_complex.code_add_argument_loader(function))
+  end
+
+  it 'create an argument loader when the function has pointer arguments supporting arrays' do
+    function = { :name => "Melon",
+                 :args_string => "stuff",
+                 :args => [test_arg[:const_ptr], test_arg[:double_ptr]]
+    }
+    expected = "void CMockExpectParameters_Melon(CMOCK_Melon_CALL_INSTANCE* cmock_call_instance, int* const MyConstPtr, int MyConstPtr_Depth, int const** MyDoublePtr, int MyDoublePtr_Depth);\n" +
+               "void CMockExpectParameters_Melon(CMOCK_Melon_CALL_INSTANCE* cmock_call_instance, int* const MyConstPtr, int MyConstPtr_Depth, int const** MyDoublePtr, int MyDoublePtr_Depth)\n{\n" +
+               "  cmock_call_instance->Expected_MyConstPtr = MyConstPtr;\n" +
+               "  cmock_call_instance->Expected_MyConstPtr_Depth = MyConstPtr_Depth;\n" +
+               "  cmock_call_instance->IgnoreArg_MyConstPtr = 0;\n" +
+               "  cmock_call_instance->ReturnThruPtr_MyConstPtr_Used = 0;\n" +
+               "  cmock_call_instance->Expected_MyDoublePtr = MyDoublePtr;\n" +
+               "  cmock_call_instance->Expected_MyDoublePtr_Depth = MyDoublePtr_Depth;\n" +
+               "  cmock_call_instance->IgnoreArg_MyDoublePtr = 0;\n" +
                "}\n\n"
     assert_equal(expected, @cmock_generator_utils_complex.code_add_argument_loader(function))
   end
@@ -231,7 +255,7 @@ describe CMockGeneratorUtils, "Verify CMockGeneratorUtils Module" do
                "    UNITY_TEST_ASSERT_EQUAL_STRING(cmock_call_instance->Expected_MyStr, MyStr, cmock_line, CMockStringMismatch);\n" +
                "  }\n"
     @unity_helper.expect :nil?, false
-    @unity_helper.expect :get_helper, ['UNITY_TEST_ASSERT_EQUAL_STRING',''], ['char*']
+    @unity_helper.expect :get_helper, ['UNITY_TEST_ASSERT_EQUAL_STRING',''], ['const char*']
     assert_equal(expected, @cmock_generator_utils_simple.code_verify_an_arg_expectation(function, arg))
   end
 
@@ -277,7 +301,9 @@ describe CMockGeneratorUtils, "Verify CMockGeneratorUtils Module" do
     expected = "  if (!cmock_call_instance->IgnoreArg_MyInt)\n" +
                "  {\n" +
                "    UNITY_SET_DETAILS(CMockString_Pear,CMockString_MyInt);\n" +
+               "    if (cmock_call_instance->Expected_MyInt != MyInt) {\n" +
                "    UNITY_TEST_ASSERT_EQUAL_INT(cmock_call_instance->Expected_MyInt, MyInt, cmock_line, CMockStringMismatch);\n" +
+               "    }\n" +
                "  }\n"
     @unity_helper.expect :nil?, false
     @unity_helper.expect :get_helper, ['UNITY_TEST_ASSERT_EQUAL_INT',''], ['int']
@@ -290,12 +316,14 @@ describe CMockGeneratorUtils, "Verify CMockGeneratorUtils Module" do
     expected = "  if (!cmock_call_instance->IgnoreArg_MyIntPtr)\n" +
                "  {\n" +
                "    UNITY_SET_DETAILS(CMockString_Pear,CMockString_MyIntPtr);\n" +
+               "    if (cmock_call_instance->Expected_MyIntPtr != MyIntPtr) {\n" +
                "    if (cmock_call_instance->Expected_MyIntPtr == NULL)\n" +
                "      { UNITY_TEST_ASSERT_NULL(MyIntPtr, cmock_line, CMockStringExpNULL); }\n" +
                "    else if (cmock_call_instance->Expected_MyIntPtr_Depth == 0)\n" +
                "      { UNITY_TEST_ASSERT_EQUAL_PTR(cmock_call_instance->Expected_MyIntPtr, MyIntPtr, cmock_line, CMockStringMismatch); }\n" +
                "    else\n" +
                "      { UNITY_TEST_ASSERT_EQUAL_INT_ARRAY(cmock_call_instance->Expected_MyIntPtr, MyIntPtr, cmock_call_instance->Expected_MyIntPtr_Depth, cmock_line, CMockStringMismatch); }\n" +
+               "    }\n" +
                "  }\n"
     @unity_helper.expect :nil?, false
     @unity_helper.expect :get_helper, ['UNITY_TEST_ASSERT_EQUAL_INT_ARRAY',''], ['int*']
@@ -308,10 +336,12 @@ describe CMockGeneratorUtils, "Verify CMockGeneratorUtils Module" do
     expected = "  if (!cmock_call_instance->IgnoreArg_MyStr)\n" +
                "  {\n" +
                "    UNITY_SET_DETAILS(CMockString_Pear,CMockString_MyStr);\n" +
+               "    if (cmock_call_instance->Expected_MyStr != MyStr) {\n" +
                "    UNITY_TEST_ASSERT_EQUAL_STRING(cmock_call_instance->Expected_MyStr, MyStr, cmock_line, CMockStringMismatch);\n" +
+               "    }\n" +
                "  }\n"
     @unity_helper.expect :nil?, false
-    @unity_helper.expect :get_helper, ['UNITY_TEST_ASSERT_EQUAL_STRING',''], ['char*']
+    @unity_helper.expect :get_helper, ['UNITY_TEST_ASSERT_EQUAL_STRING',''], ['const char*']
     assert_equal(expected, @cmock_generator_utils_complex.code_verify_an_arg_expectation(function, arg))
   end
 
@@ -321,10 +351,12 @@ describe CMockGeneratorUtils, "Verify CMockGeneratorUtils Module" do
     expected = "  if (!cmock_call_instance->IgnoreArg_MyMyType)\n" +
                "  {\n" +
                "    UNITY_SET_DETAILS(CMockString_Pear,CMockString_MyMyType);\n" +
+               "    if (cmock_call_instance->Expected_MyMyType != MyMyType) {\n" +
                "    if (cmock_call_instance->Expected_MyMyType == NULL)\n" +
                "      { UNITY_TEST_ASSERT_NULL(MyMyType, cmock_line, CMockStringExpNULL); }\n" +
                "    else\n" +
                "      { UNITY_TEST_ASSERT_EQUAL_MEMORY_ARRAY((void*)(cmock_call_instance->Expected_MyMyType), (void*)(MyMyType), sizeof(MY_TYPE), 1, cmock_line, CMockStringMismatch); }\n" +
+               "    }\n" +
                "  }\n"
     @unity_helper.expect :nil?, false
     @unity_helper.expect :get_helper, ['UNITY_TEST_ASSERT_EQUAL_MEMORY_ARRAY', ''],  ['MY_TYPE']
@@ -337,7 +369,9 @@ describe CMockGeneratorUtils, "Verify CMockGeneratorUtils Module" do
     expected = "  if (!cmock_call_instance->IgnoreArg_MyMyType)\n" +
                "  {\n" +
                "    UNITY_SET_DETAILS(CMockString_Pear,CMockString_MyMyType);\n" +
+               "    if (cmock_call_instance->Expected_MyMyType != MyMyType) {\n" +
                "    UNITY_TEST_ASSERT_EQUAL_MY_TYPE(cmock_call_instance->Expected_MyMyType, MyMyType, cmock_line, CMockStringMismatch);\n" +
+               "    }\n" +
                "  }\n"
     @unity_helper.expect :nil?, false
     @unity_helper.expect :get_helper, ['UNITY_TEST_ASSERT_EQUAL_MY_TYPE',  ''], ['MY_TYPE']
@@ -350,12 +384,14 @@ describe CMockGeneratorUtils, "Verify CMockGeneratorUtils Module" do
     expected = "  if (!cmock_call_instance->IgnoreArg_MyMyTypePtr)\n" +
                "  {\n" +
                "    UNITY_SET_DETAILS(CMockString_Pear,CMockString_MyMyTypePtr);\n" +
+               "    if (cmock_call_instance->Expected_MyMyTypePtr != MyMyTypePtr) {\n" +
                "    if (cmock_call_instance->Expected_MyMyTypePtr == NULL)\n" +
                "      { UNITY_TEST_ASSERT_NULL(MyMyTypePtr, cmock_line, CMockStringExpNULL); }\n" +
                "    else if (cmock_call_instance->Expected_MyMyTypePtr_Depth == 0)\n" +
                "      { UNITY_TEST_ASSERT_EQUAL_PTR(cmock_call_instance->Expected_MyMyTypePtr, MyMyTypePtr, cmock_line, CMockStringMismatch); }\n" +
                "    else\n" +
                "      { UNITY_TEST_ASSERT_EQUAL_MY_TYPE_ARRAY(cmock_call_instance->Expected_MyMyTypePtr, MyMyTypePtr, cmock_call_instance->Expected_MyMyTypePtr_Depth, cmock_line, CMockStringMismatch); }\n" +
+               "    }\n" +
                "  }\n"
     @unity_helper.expect :nil?, false
     @unity_helper.expect :get_helper, ['UNITY_TEST_ASSERT_EQUAL_MY_TYPE_ARRAY', ''], ['MY_TYPE*']
@@ -368,7 +404,9 @@ describe CMockGeneratorUtils, "Verify CMockGeneratorUtils Module" do
     expected = "  if (!cmock_call_instance->IgnoreArg_MyMyType)\n" +
                "  {\n" +
                "    UNITY_SET_DETAILS(CMockString_Pear,CMockString_MyMyType);\n" +
+               "    if (&cmock_call_instance->Expected_MyMyType != &MyMyType) {\n" +
                "    UNITY_TEST_ASSERT_EQUAL_MY_TYPE_ARRAY(&cmock_call_instance->Expected_MyMyType, &MyMyType, 1, cmock_line, CMockStringMismatch);\n" +
+               "    }\n" +
                "  }\n"
     @unity_helper.expect :nil?, false
     @unity_helper.expect :get_helper, ['UNITY_TEST_ASSERT_EQUAL_MY_TYPE_ARRAY', '&'], ['MY_TYPE']

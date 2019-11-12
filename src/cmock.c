@@ -4,18 +4,18 @@
     [Released under MIT License. Please refer to license.txt for details]
 ========================================== */
 
-#include "unity.h"
 #include "cmock.h"
 
 //public constants to be used by mocks
 const char* CMockStringOutOfMemory = "CMock has run out of memory. Please allocate more.";
 const char* CMockStringCalledMore  = "Called more times than expected.";
-const char* CMockStringCalledLess  = "Called less times than expected.";
+const char* CMockStringCalledLess  = "Called fewer times than expected.";
 const char* CMockStringCalledEarly = "Called earlier than expected.";
 const char* CMockStringCalledLate  = "Called later than expected.";
 const char* CMockStringCallOrder   = "Called out of order.";
 const char* CMockStringIgnPreExp   = "IgnoreArg called before Expect.";
 const char* CMockStringPtrPreExp   = "ReturnThruPtr called before Expect.";
+const char* CMockStringPtrIsNULL   = "Pointer is NULL.";
 const char* CMockStringExpNULL     = "Expected NULL.";
 const char* CMockStringMismatch    = "Function called with unexpected argument value.";
 
@@ -23,11 +23,11 @@ const char* CMockStringMismatch    = "Function called with unexpected argument v
 #ifdef CMOCK_MEM_DYNAMIC
 static unsigned char*         CMock_Guts_Buffer = NULL;
 static CMOCK_MEM_INDEX_TYPE   CMock_Guts_BufferSize = CMOCK_MEM_ALIGN_SIZE;
-static CMOCK_MEM_INDEX_TYPE   CMock_Guts_FreePtr;
+static CMOCK_MEM_INDEX_TYPE   CMock_Guts_FreePtr = CMOCK_MEM_ALIGN_SIZE;
 #else
 static unsigned char          CMock_Guts_Buffer[CMOCK_MEM_SIZE + CMOCK_MEM_ALIGN_SIZE];
 static CMOCK_MEM_INDEX_TYPE   CMock_Guts_BufferSize = CMOCK_MEM_SIZE + CMOCK_MEM_ALIGN_SIZE;
-static CMOCK_MEM_INDEX_TYPE   CMock_Guts_FreePtr;
+static CMOCK_MEM_INDEX_TYPE   CMock_Guts_FreePtr = CMOCK_MEM_ALIGN_SIZE;
 #endif
 
 //-------------------------------------------------------
@@ -47,12 +47,17 @@ CMOCK_MEM_INDEX_TYPE CMock_Guts_MemNew(CMOCK_MEM_INDEX_TYPE size)
     size = (size + CMOCK_MEM_ALIGN_MASK) & ~CMOCK_MEM_ALIGN_MASK;
   if ((CMock_Guts_BufferSize - CMock_Guts_FreePtr) < size)
   {
-#ifdef CMOCK_MEM_DYNAMIC
-    CMock_Guts_BufferSize += CMOCK_MEM_SIZE + size;
-    CMock_Guts_Buffer = realloc(CMock_Guts_Buffer, (size_t)CMock_Guts_BufferSize);
-    if (CMock_Guts_Buffer == NULL)
-#endif //yes that if will continue to the return below if TRUE
-      return CMOCK_GUTS_NONE;
+#ifndef CMOCK_MEM_DYNAMIC
+    return CMOCK_GUTS_NONE; // nothing we can do; our static buffer is out of memory
+#else
+    // our dynamic buffer does not have enough room; request more via realloc()
+    CMOCK_MEM_INDEX_TYPE new_buffersize = CMock_Guts_BufferSize + CMOCK_MEM_SIZE + size;
+    unsigned char* new_buffer = realloc(CMock_Guts_Buffer, (size_t)new_buffersize);
+    if (new_buffer == NULL)
+      return CMOCK_GUTS_NONE; // realloc() failed; out of memory
+    CMock_Guts_Buffer = new_buffer;
+    CMock_Guts_BufferSize = new_buffersize;
+#endif
   }
 
   //determine where we're putting this new block, and init its pointer to be the end of the line
@@ -160,6 +165,14 @@ void* CMock_Guts_GetAddressFor(CMOCK_MEM_INDEX_TYPE index)
   {
     return NULL;
   }
+}
+
+//-------------------------------------------------------
+// CMock_Guts_MemBytesCapacity
+//-------------------------------------------------------
+CMOCK_MEM_INDEX_TYPE CMock_Guts_MemBytesCapacity(void)
+{
+  return (sizeof(CMock_Guts_Buffer) - CMOCK_MEM_ALIGN_SIZE);
 }
 
 //-------------------------------------------------------
